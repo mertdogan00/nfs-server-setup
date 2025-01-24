@@ -1,0 +1,106 @@
+# 📄 Secure GlusterFS Setup with Root CA and Intermediate CA for Multi-Country Nodes 🌍
+
+# 🔧 Step 1: Install GlusterFS on All Nodes
+# Run the following commands on EACH node (Node 1: 192.168.1.1, Node 2: 192.168.2.1, Node 3: 192.168.3.1):
+sudo apt update && sudo apt upgrade -y
+sudo apt install glusterfs-server -y
+sudo systemctl enable --now glusterd
+
+# ✨ Explanation:
+# - Updates the system to the latest packages.
+# - Installs the GlusterFS server.
+# - Enables and starts the GlusterFS service.
+
+# 🔗 Step 2: Connect GlusterFS Nodes as Peers
+# On Node 1, probe other nodes to add them as peers:
+sudo gluster peer probe 192.168.2.1
+sudo gluster peer probe 192.168.3.1
+
+# ✅ Verify the peer connections:
+sudo gluster peer status
+
+# 🔐 Step 3: Set Up SSL/TLS with Root CA and Intermediate CA for Secure Communication
+
+# 🛠 3.1 Generate Root and Intermediate CA on Node 1
+sudo mkdir -p /etc/ssl/glusterfs
+cd /etc/ssl/glusterfs
+
+# Generate Root CA
+openssl genrsa -out rootCA.key 4096
+openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 3650 -out rootCA.pem
+
+# Generate Intermediate CA
+openssl genrsa -out intermediateCA.key 4096
+openssl req -new -key intermediateCA.key -out intermediateCA.csr
+openssl x509 -req -in intermediateCA.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out intermediateCA.pem -days 3650 -sha256
+
+# 🛠 3.2 Generate and Sign Node Certificates
+# On EACH node, generate a private key and CSR:
+sudo mkdir -p /etc/ssl/glusterfs/private
+openssl genrsa -out /etc/ssl/glusterfs/private/glusterfs.key 2048
+openssl req -new -key /etc/ssl/glusterfs/private/glusterfs.key -out /etc/ssl/glusterfs/glusterfs.csr
+
+# Copy the CSR from each node to Node 1 for signing (example for Node 2):
+scp /etc/ssl/glusterfs/glusterfs.csr user@192.168.1.1:/etc/ssl/glusterfs/node2.csr
+
+# On Node 1, sign the CSRs with the Intermediate CA:
+openssl x509 -req -in node2.csr -CA intermediateCA.pem -CAkey intermediateCA.key -CAcreateserial -out node2.crt -days 365 -sha256
+
+# Distribute the signed certificates back to the respective nodes (example for Node 2):
+scp node2.crt user@192.168.2.1:/etc/ssl/glusterfs/glusterfs.crt
+
+# 🛠 3.3 Combine Intermediate and Root CA Certificates
+# On EACH node, combine the Intermediate CA and Root CA into a chain file:
+cat /etc/ssl/glusterfs/intermediateCA.pem /etc/ssl/glusterfs/rootCA.pem > /etc/ssl/glusterfs/ca_chain.pem
+
+# 🔒 Step 4: Configure SSL in GlusterFS
+# Edit the GlusterFS configuration file on EACH node:
+sudo nano /etc/glusterfs/glusterd.vol
+
+# Add the following lines:
+option transport.socket.ssl-enabled on
+option transport.socket.ssl-cert-file /etc/ssl/glusterfs/glusterfs.crt
+option transport.socket.ssl-key-file /etc/ssl/glusterfs/private/glusterfs.key
+option transport.socket.ssl-ca-file /etc/ssl/glusterfs/ca_chain.pem
+
+# Restart the GlusterFS service on EACH node:
+sudo systemctl restart glusterd
+
+# 🛡 Step 5: Set Up Firewall Rules
+# Allow GlusterFS ports (24007-24009) and restrict access to specific IPs:
+sudo ufw allow from 192.168.1.1 to any port 24007:24009 proto tcp
+sudo ufw allow from 192.168.2.1 to any port 24007:24009 proto tcp
+sudo ufw allow from 192.168.3.1 to any port 24007:24009 proto tcp
+
+# Enable the firewall:
+sudo ufw enable
+
+# 📦 Step 6: Create and Start the GlusterFS Volume
+# On Node 1, create a distributed-replicated GlusterFS volume:
+sudo gluster volume create secure-volume replica 3 transport tcp \
+192.168.1.1:/data/glusterfs \
+192.168.2.1:/data/glusterfs \
+192.168.3.1:/data/glusterfs
+
+# Start the volume:
+sudo gluster volume start secure-volume
+
+# 🖥 Step 7: Configure Secure Mounting on the Client
+# On the client machine, install GlusterFS client tools:
+sudo apt install glusterfs-client -y
+
+# Copy the CA chain from any GlusterFS node to the client:
+scp user@192.168.1.1:/etc/ssl/glusterfs/ca_chain.pem /etc/ssl/glusterfs/
+
+# Mount the GlusterFS volume securely:
+sudo mkdir -p /mnt/secure-volume
+sudo mount -t glusterfs -o transport=tcp,ssl 192.168.1.1:/secure-volume /mnt/secure-volume
+
+# 🔍 Step 8: Verify and Monitor the Setup
+# Check volume information:
+sudo gluster volume info
+
+# Check peer status:
+sudo gluster peer status
+
+# 🎉 Your Secure GlusterFS Setup with Root and Intermediate CA is Complete!
