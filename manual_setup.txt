@@ -118,3 +118,5 @@ sudo umount /mnt/glusterfs
 - Your GlusterFS nodes are securely connected.  
 - Client-to-server communication is encrypted using SSL/TLS.  
 - Manage your distributed storage and mount it on additional clients as needed!  
+
+# 👁️ For more details, refer to the optional setup files such as `optional_setup.txt`, `manual_setup.txt`, or any other relevant documentation files located in your repository.
