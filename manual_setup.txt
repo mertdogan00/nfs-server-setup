@@ -1,63 +1,108 @@
-# 📄 GlusterFS Setup Manual Guide  
+# 📄 Secure GlusterFS Setup Manual Guide  
 
-This guide provides step-by-step instructions to set up GlusterFS with at least two nodes and configure a distributed storage solution.  
+This guide provides a secure setup for GlusterFS nodes located in different environments, ensuring encryption between GlusterFS servers and clients.  
 
-## 🔧 Step 1: Install GlusterFS on All Nodes  
-Run these commands on **each node** to install GlusterFS:  
+---
+
+# 🔧 Step 1: Install GlusterFS on All Nodes  
+Run the following commands on **each GlusterFS node** (e.g., Node 1: `10.0.0.1` and Node 2: `10.0.0.2`) to install GlusterFS:  
+
 sudo apt update && sudo apt upgrade -y  
 sudo apt install glusterfs-server -y  
 sudo systemctl enable --now glusterd  
 
-✨ This will:  
-- Update your system.  
-- Install the GlusterFS server.  
-- Enable and start the GlusterFS service automatically.  
+# ✨ What this does:  
+- Updates your system to the latest packages.  
+- Installs the GlusterFS server.  
+- Starts and enables the GlusterFS service on boot.  
 
 ---
 
-## 🔗 Step 2: Peer Connection Between Nodes  
-On **one node**, connect the other nodes as peers using the following command:  
+# 🔗 Step 2: Peer Connection Between Nodes  
+On **Node 1**, add the other nodes as peers:  
+
 sudo gluster peer probe <NODE_IP_OR_HOSTNAME>  
 
-Example:  
-sudo gluster peer probe 192.168.1.2  
-sudo gluster peer probe 192.168.1.3  
+# Example:  
+sudo gluster peer probe 10.0.0.2  
 
-✅ Verify the connection with the following command:  
+# ✅ Verify the connection with:  
 sudo gluster peer status  
 
 ---
 
-## 📦 Step 3: Create a Volume  
-1️⃣ Create a directory on **each node** for GlusterFS storage:  
+# 🔐 Step 3: Enable SSL/TLS Between GlusterFS Nodes  
+1️⃣ On **each GlusterFS node**, generate SSL certificates:  
+
+sudo mkdir -p /etc/ssl/glusterfs  
+sudo openssl req -nodes -new -x509 -keyout /etc/ssl/glusterfs/glusterfs.key -out /etc/ssl/glusterfs/glusterfs.crt -days 5475  
+
+# Fill in the certificate details (country, state, etc.) as required.  
+
+2️⃣ Copy the SSL certificates to all other nodes:  
+
+scp /etc/ssl/glusterfs/glusterfs.crt user@10.0.0.2:/etc/ssl/glusterfs/  
+
+3️⃣ On **each node**, enable SSL in the GlusterFS configuration:  
+
+sudo nano /etc/glusterfs/glusterd.vol  
+
+# Add these lines to the configuration file:  
+option transport.socket.ssl-enabled on  
+option transport.socket.ssl-cert /etc/ssl/glusterfs/glusterfs.crt  
+option transport.socket.ssl-key /etc/ssl/glusterfs/glusterfs.key  
+
+4️⃣ Restart the GlusterFS service on all nodes:  
+
+sudo systemctl restart glusterd  
+
+---
+
+# 📦 Step 4: Create a GlusterFS Volume  
+1️⃣ On **Node 1**, create a directory for GlusterFS storage on all nodes:  
+
 sudo mkdir -p /data/glusterfs  
 
 2️⃣ Create the GlusterFS volume:  
-sudo gluster volume create my-volume replica 2 transport tcp 192.168.1.1:/data/glusterfs 192.168.1.2:/data/glusterfs  
 
-📝 Explanation:  
+sudo gluster volume create my-volume replica 2 transport tcp 10.0.0.1:/data/glusterfs 10.0.0.2:/data/glusterfs  
+
+# Explanation:  
 - `my-volume`: The name of the volume.  
 - `replica 2`: Ensures data is replicated on two nodes.  
-- Replace `192.168.1.1` and `192.168.1.2` with your actual node IP addresses.  
+- Replace `10.0.0.1` and `10.0.0.2` with your actual node IP addresses.  
 
 3️⃣ Start the volume:  
+
 sudo gluster volume start my-volume  
 
 ---
 
-## 🖥️ Step 4: Mount the Volume on a Client  
-1️⃣ On the **client machine**, install GlusterFS tools:  
+# 🖥️ Step 5: Secure Client-to-GlusterFS Server Communication  
+1️⃣ On the **GlusterFS client**, install the GlusterFS tools:  
+
 sudo apt install glusterfs-client -y  
 
-2️⃣ Create a mount point:  
-sudo mkdir -p /mnt/glusterfs  
+2️⃣ Copy the SSL certificate from a GlusterFS node to the client:  
 
-3️⃣ Mount the GlusterFS volume:  
-sudo mount -t glusterfs 192.168.1.1:/my-volume /mnt/glusterfs  
+scp user@10.0.0.1:/etc/ssl/glusterfs/glusterfs.crt /etc/ssl/glusterfs/  
+
+3️⃣ Enable SSL in the client configuration:  
+
+sudo nano /etc/glusterfs/volfile.client.my-volume  
+
+# Add these lines:  
+option transport.socket.ssl-enabled on  
+option transport.socket.ssl-cert /etc/ssl/glusterfs/glusterfs.crt  
+
+4️⃣ Mount the GlusterFS volume securely:  
+
+sudo mkdir -p /mnt/glusterfs  
+sudo mount -t glusterfs -o transport=tcp,ssl 10.0.0.1:/my-volume /mnt/glusterfs  
 
 ---
 
-## 🔍 Step 5: Verify and Manage the Setup  
+# 🔍 Step 6: Verify and Manage the Setup  
 1️⃣ To check volume info:  
 sudo gluster volume info  
 
@@ -67,4 +112,9 @@ sudo gluster volume status
 3️⃣ To unmount the volume if needed:  
 sudo umount /mnt/glusterfs  
 
-🎉 Your GlusterFS setup is now complete! You can manage your distributed storage and mount it on additional clients as needed.  
+---
+
+# 🎉 Your Secure GlusterFS Setup is Complete!  
+- Your GlusterFS nodes are securely connected.  
+- Client-to-server communication is encrypted using SSL/TLS.  
+- Manage your distributed storage and mount it on additional clients as needed!  
