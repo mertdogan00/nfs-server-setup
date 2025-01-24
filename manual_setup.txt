@@ -1,0 +1,70 @@
+# 📄 GlusterFS Setup Manual Guide  
+
+This guide provides step-by-step instructions to set up GlusterFS with at least two nodes and configure a distributed storage solution.  
+
+## 🔧 Step 1: Install GlusterFS on All Nodes  
+Run these commands on **each node** to install GlusterFS:  
+sudo apt update && sudo apt upgrade -y  
+sudo apt install glusterfs-server -y  
+sudo systemctl enable --now glusterd  
+
+✨ This will:  
+- Update your system.  
+- Install the GlusterFS server.  
+- Enable and start the GlusterFS service automatically.  
+
+---
+
+## 🔗 Step 2: Peer Connection Between Nodes  
+On **one node**, connect the other nodes as peers using the following command:  
+sudo gluster peer probe <NODE_IP_OR_HOSTNAME>  
+
+Example:  
+sudo gluster peer probe 192.168.1.2  
+sudo gluster peer probe 192.168.1.3  
+
+✅ Verify the connection with the following command:  
+sudo gluster peer status  
+
+---
+
+## 📦 Step 3: Create a Volume  
+1️⃣ Create a directory on **each node** for GlusterFS storage:  
+sudo mkdir -p /data/glusterfs  
+
+2️⃣ Create the GlusterFS volume:  
+sudo gluster volume create my-volume replica 2 transport tcp 192.168.1.1:/data/glusterfs 192.168.1.2:/data/glusterfs  
+
+📝 Explanation:  
+- `my-volume`: The name of the volume.  
+- `replica 2`: Ensures data is replicated on two nodes.  
+- Replace `192.168.1.1` and `192.168.1.2` with your actual node IP addresses.  
+
+3️⃣ Start the volume:  
+sudo gluster volume start my-volume  
+
+---
+
+## 🖥️ Step 4: Mount the Volume on a Client  
+1️⃣ On the **client machine**, install GlusterFS tools:  
+sudo apt install glusterfs-client -y  
+
+2️⃣ Create a mount point:  
+sudo mkdir -p /mnt/glusterfs  
+
+3️⃣ Mount the GlusterFS volume:  
+sudo mount -t glusterfs 192.168.1.1:/my-volume /mnt/glusterfs  
+
+---
+
+## 🔍 Step 5: Verify and Manage the Setup  
+1️⃣ To check volume info:  
+sudo gluster volume info  
+
+2️⃣ To check volume status:  
+sudo gluster volume status  
+
+3️⃣ To unmount the volume if needed:  
+sudo umount /mnt/glusterfs  
+
+🎉 Your GlusterFS setup is now complete! You can manage your distributed storage and mount it on additional clients as needed.  
